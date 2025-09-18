@@ -1,0 +1,12 @@
+{
+  "domain": "minimail",
+  "name": "MiniMail (IMAP → Sensors)",
+  "version": "0.2.3",
+  "documentation": "https://github.com/hariolu/ha-minimail",
+  "issue_tracker": "https://github.com/hariolu/ha-minimail/issues",
+  "requirements": [],
+  "codeowners": ["@hariolu"],
+  "iot_class": "cloud_polling",
+  "integration_type": "hub"
+}
+
