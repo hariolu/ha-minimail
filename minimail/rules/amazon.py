@@ -49,7 +49,9 @@ _RE_ITEM_HTML = re.compile(
 
 # Visible headline in HTML cards (e.g., "Your package was delivered!", "Out for delivery")
 _RE_HTML_HEADLINE = re.compile(
-    r'(Your package was delivered!|Out for delivery|Your order has shipped|Shipped)', re.I
+    r'(Your package was delivered!|Out for delivery|Your order has shipped|Shipped|'
+    r'Order confirmed|Order placed|Ordered|We\'ve received your order)',  # Ordered variants
+    re.I,
 )
 
 def _items_from_text(text: str) -> List[str]:
@@ -78,8 +80,12 @@ def _items_from_html(html: str) -> List[str]:
     return out
 
 def _event_from_subject_or_html(subject: str, html: str) -> str:
-    """Infer a compact event label: shipped | out_for_delivery | delivered | ''."""
+    """Infer a compact event label: ordered | shipped | out_for_delivery | delivered | ''."""
     subj = (subject or "").lower()
+    # NEW: "Ordered" style subjects
+    if subj.startswith("ordered:") or " order confirmed" in subj or "order confirmation" in subj \
+       or "we've received your order" in subj or "your order has been placed" in subj:
+        return "ordered"
     if subj.startswith("shipped:") or " has shipped" in subj or "your order has shipped" in subj:
         return "shipped"
     if "out for delivery" in subj:
