@@ -20,3 +20,7 @@ DEFAULT_SEARCH = "ALL"
 
 DEVICE_NAME = "minimail"     
 ENTITY_PREFIX = "minimail"   
+
+# Persistent cache (Store) config
+STORAGE_KEY = f"{DOMAIN}_cache"
+STORAGE_VERSION = 1

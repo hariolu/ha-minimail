@@ -26,7 +26,7 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
       so Delivered and Digest can BOTH merge data in one pass.
     """
     msg: Message = parsed.get("_message")
-    # casefold() более устойчив к юникоду, чем lower()
+    # use casefold() for more robust Unicode-insensitive matching than lower()
     subj = (parsed.get("subject") or "").casefold()
     frm = (parsed.get("from") or "").casefold()
     if not msg:
@@ -41,8 +41,8 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
         return data, flags
 
     # USPS?
-    # встречается множество вариантов адреса: 'USPS Informed Delivery',
-    # 'USPSInformedDelivery@informeddelivery.usps.com', переадресации и т.п.
+    # USPS sender addresses appear in many variants, e.g. 'USPS Informed Delivery',
+    # 'USPSInformedDelivery@informeddelivery.usps.com', forwarding aliases, etc.
     is_usps = (
         "informeddelivery" in frm
         or "email.informeddelivery.usps.com" in frm
@@ -91,6 +91,18 @@ class ImapClient:
             "amazon": {},
         }
         self._flags: Dict[str, Any] = {}
+
+    def seed(self, snapshot: Dict[str, Any]) -> None:
+        """Warm-start internal state from a persisted snapshot (USPS/Amazon only)."""
+        try:
+            if isinstance(snapshot, dict):
+                self._data = {
+                    "usps": dict((snapshot.get("usps") or {})),
+                    "amazon": dict((snapshot.get("amazon") or {})),
+                }
+        except Exception:
+            # Best-effort; ignore seeding errors
+            pass
 
     def _fetch_sync(self) -> Dict[str, Any]:
         """
