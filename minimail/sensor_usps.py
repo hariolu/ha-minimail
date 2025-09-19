@@ -30,22 +30,6 @@ class _Base(CoordinatorEntity, SensorEntity):
         u = self._usps() or {}
         return (u.get("last_delivered") or {})
 
-class UspsSubject(_Base):
-    """Readable subject of the latest USPS email (Digest or Delivered)."""
-    def __init__(self, c, d, ns): super().__init__(c, d, ns, "USPS Subject", "usps_subject")
-    @property
-    def state(self) -> str:
-        return str((self._usps().get("subject") or "")).strip()
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        u = self._usps()
-        ld = self._usps_delivered()
-        return {
-            "type": u.get("type", ""),                # "digest" / "delivered"
-            "last_delivered_subject": ld.get("subject", ""),
-            "dashboard_url": u.get("dashboard_url", ""),
-        }
-
 class UspsSubjectDigest(_Base):
     """Subject of the latest USPS Daily Digest (explicit)."""
     def __init__(self, c, d, ns): super().__init__(c, d, ns, "USPS Subject (Digest)", "usps_subject_digest")
@@ -183,7 +167,6 @@ class UspsLastDelivered(_Base):
 
 # exported factory list
 USPS_ENTITIES = [
-    UspsSubject,
     UspsSubjectDigest,
     UspsSubjectDelivered,
     UspsMailpiecesExpectedToday,
