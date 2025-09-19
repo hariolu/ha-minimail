@@ -261,8 +261,11 @@ def _guess_ext(ctype: str, filename: str | None) -> str:
 
 def _save_mail_images(msg: Message, html: str, mail_from: List[str]) -> Dict[str, List[str] | int]:
     """Extract inline 'cid:' images of mailpieces to /config/www/minimail/usps."""
-    cids = set(_RE_CAMPAIGN_IMG_CID.findall(html)) | set(_RE_MAILPIECE_IMG_CID.findall(html))
-    if not cids:
+    # Preserve appearance order of images from both blocks; keep first occurrence
+    seq = list(_RE_CAMPAIGN_IMG_CID.findall(html)) + list(_RE_MAILPIECE_IMG_CID.findall(html))
+    seen: set[str] = set()
+    ordered = [cid for cid in seq if not (cid in seen or seen.add(cid))]
+    if not ordered:
         return {"files": [], "urls": [], "count": 0}
 
     # Build map CID -> part
@@ -275,7 +278,7 @@ def _save_mail_images(msg: Message, html: str, mail_from: List[str]) -> Dict[str
             continue
         cid_header = (part.get("Content-ID") or "").strip()
         cid = cid_header.strip("<>") if cid_header else ""
-        if not cid or cid not in cids:
+        if not cid or cid not in set(ordered):
             continue
         cid_map[cid] = (payload, (part.get_content_type() or "image/jpeg"), part.get_filename())
 
@@ -291,7 +294,6 @@ def _save_mail_images(msg: Message, html: str, mail_from: List[str]) -> Dict[str
 
     files: List[str] = []
     urls: List[str] = []
-    ordered = list(cids)
     for idx, cid in enumerate(ordered, start=1):
         blob, ctype, fname = cid_map.get(cid, (b"", "image/jpeg", None))
         if not blob:
@@ -382,6 +384,14 @@ def parse_usps_digest(msg: Message) -> Dict[str, object]:
 
     # Mail scans (CID images) for future use
     mail_images = _save_mail_images(msg, html, mail_from)
+
+    # If packages expected = 0, ensure pkgs_from is empty to avoid stray names
+    try:
+        pkgs_expected_int = int(pkgs_expected or 0)
+    except Exception:
+        pkgs_expected_int = 0
+    if pkgs_expected_int == 0:
+        pkgs_from = []
 
     return {
         "mail_expected": int(mail_expected or 0),
