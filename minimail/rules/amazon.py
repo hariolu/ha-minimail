@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple
 from email.message import Message
 from urllib.parse import urlparse, parse_qs
 
+
 def _extract_parts(msg: Message) -> Tuple[str, str]:
     """Return (html, text) bodies concatenated from all MIME parts."""
     html, text = [], []
@@ -27,8 +28,12 @@ def _extract_parts(msg: Message) -> Tuple[str, str]:
             text.append(s)
     return " ".join(html), "\n".join(text)
 
+
 # Progress-tracker link
-_RE_TRACK = re.compile(r'https?://www\.amazon\.com/progress-tracker/package[^ \n<>"\']+', re.I)
+_RE_TRACK = re.compile(
+    r'https?://www\.amazon\.com/progress-tracker/package[^ \n<>"\']+',
+    re.I,
+)
 
 # ETA like "Arriving September 9", "Delivery estimate Sep 9", "Arrives Today/Tomorrow"
 _RE_ETA = re.compile(
@@ -54,6 +59,7 @@ _RE_HTML_HEADLINE = re.compile(
     re.I,
 )
 
+
 def _items_from_text(text: str) -> List[str]:
     """Extract item titles from plaintext bullets."""
     items = []
@@ -63,6 +69,7 @@ def _items_from_text(text: str) -> List[str]:
         name = re.split(r'\s{2,}Quantity:|  Quantity:', name)[0].strip()
         items.append(name)
     return items
+
 
 def _items_from_html(html: str) -> List[str]:
     """Extract item titles from HTML links; fallback to generic <li> contents."""
@@ -79,30 +86,46 @@ def _items_from_html(html: str) -> List[str]:
             out.append(x)
     return out
 
+
 def _event_from_subject_or_html(subject: str, html: str) -> str:
     """Infer a compact event label: ordered | shipped | out_for_delivery | delivered | ''."""
     subj = (subject or "").lower()
-    # NEW: "Ordered" style subjects
-    if subj.startswith("ordered:") or " order confirmed" in subj or "order confirmation" in subj \
-       or "we've received your order" in subj or "your order has been placed" in subj:
+
+    # Ordered/Order-confirmation subjects
+    if (
+        subj.startswith("ordered:")
+        or " order confirmed" in subj
+        or "order confirmation" in subj
+        or "we've received your order" in subj
+        or "your order has been placed" in subj
+        or "order placed" in subj
+    ):
         return "ordered"
+
     if subj.startswith("shipped:") or " has shipped" in subj or "your order has shipped" in subj:
         return "shipped"
+
     if "out for delivery" in subj:
         return "out_for_delivery"
+
     if subj.startswith("delivered:") or " delivered" in subj:
         return "delivered"
-    # Fallback: detect from HTML headline
+
+    # Fallback: detect from an HTML headline on the card
     m = _RE_HTML_HEADLINE.search(html or "")
     if m:
         t = m.group(1).lower()
-        if "delivered" in t:
-            return "delivered"
+        if "ordered" in t or "order confirmed" in t or "order placed" in t:
+            return "ordered"
+        if "shipped" in t or "has shipped" in t:
+            return "shipped"
         if "out for delivery" in t:
             return "out_for_delivery"
-        if "shipped" in t:
-            return "shipped"
+        if "delivered" in t:
+            return "delivered"
+
     return ""
+
 
 def _parse_track_params(url: str) -> Dict[str, str]:
     """Extract orderId/shipmentId/packageIndex from the tracker URL."""
@@ -115,6 +138,7 @@ def _parse_track_params(url: str) -> Dict[str, str]:
         }
     except Exception:
         return {"order_id": "", "shipment_id": "", "package_index": ""}
+
 
 def parse_amazon_email(msg: Message) -> Dict:
     """

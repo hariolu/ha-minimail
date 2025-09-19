@@ -32,8 +32,20 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
     if not msg:
         return data, flags
 
-    # Amazon
-    if "amazon" in frm or "shipment-tracking@amazon" in frm:
+    # Amazon (address OR subject hints – helps with forwarded copies)
+    is_amazon = (
+        "amazon" in frm
+        or "shipment-tracking@amazon" in frm
+        or "auto-confirm@amazon" in frm         # Ordered
+        or "delivery-update@amazon" in frm      # Delivered / updates
+        or "order-update@amazon" in frm
+        or subj.startswith("shipped:")
+        or subj.startswith("delivered:")
+        or subj.startswith("ordered:")
+        or ("out for delivery" in subj)
+        or ("your order has shipped" in subj)
+    )
+    if is_amazon:
         amazon = data.setdefault("amazon", {})
         amazon, got = handle_amazon(msg, amazon)
         if got:
