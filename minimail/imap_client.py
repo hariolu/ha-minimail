@@ -26,8 +26,9 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
       so Delivered and Digest can BOTH merge data in one pass.
     """
     msg: Message = parsed.get("_message")
-    subj = (parsed.get("subject") or "").lower()
-    frm = (parsed.get("from") or "").lower()
+    # casefold() более устойчив к юникоду, чем lower()
+    subj = (parsed.get("subject") or "").casefold()
+    frm = (parsed.get("from") or "").casefold()
     if not msg:
         return data, flags
 
@@ -40,7 +41,15 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
         return data, flags
 
     # USPS?
-    is_usps = ("usps" in frm) or ("informeddelivery" in frm) or ("email.informeddelivery.usps.com" in frm)
+    # встречается множество вариантов адреса: 'USPS Informed Delivery',
+    # 'USPSInformedDelivery@informeddelivery.usps.com', переадресации и т.п.
+    is_usps = (
+        "informeddelivery" in frm
+        or "email.informeddelivery.usps.com" in frm
+        or "usps informed delivery" in frm
+        or "uspsinformeddelivery@" in frm
+        or ("usps" in frm and "delivery" in frm)
+    )
 
     if is_usps:
         # USPS Delivered
@@ -61,12 +70,8 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
             return data, flags
 
         # USPS Daily Digest
-        if (
-            "daily digest" in subj
-            or "informed delivery" in subj
-            or "ready to view" in subj
-            or "coming to you soon" in subj
-        ):
+        if ("daily digest" in subj) or ("ready to view" in subj) \
+           or ("informed delivery" in subj) or ("coming to you soon" in subj):
             if not flags.get("got_usps_digest"):
                 usps = data.setdefault("usps", {})
                 usps, _ = handle_usps_digest(msg, usps)
@@ -133,8 +138,17 @@ class ImapClient:
 
             pick = all_ids[-fetch_limit:]
 
-            data = dict(self._data)
-            flags = dict(self._flags)
+            # Fresh pass each poll:
+            # - start from the last known payload (shallow copy per section)
+            # - but RESET per-pass routing flags so newer USPS letters are parsed
+            data = {
+                "usps": dict((self._data.get("usps") or {})),
+                "amazon": dict((self._data.get("amazon") or {})),
+            }
+            flags = {
+                "got_usps_digest": False,
+                "got_usps_delivered": False,
+            }
 
             # Newest first
             for uid in reversed(pick):
@@ -163,8 +177,11 @@ class ImapClient:
                 parsed = {"from": from_hdr, "subject": subj_hdr, "_message": msg}
                 data, flags = process_message(parsed, data, flags)
 
+            # Save parsed data; flags are per-pass, do not carry them over.
             self._data = data
-            self._flags = flags
+            # keep flags only if ever needed for future diagnostics, but
+            # ensure next pass starts clean
+            self._flags = {}
 
             try:
                 M.close()
