@@ -46,6 +46,41 @@ class UspsSubject(_Base):
             "dashboard_url": u.get("dashboard_url", ""),
         }
 
+class UspsSubjectDigest(_Base):
+    """Subject of the latest USPS Daily Digest (explicit)."""
+    def __init__(self, c, d, ns): super().__init__(c, d, ns, "USPS Subject (Digest)", "usps_subject_digest")
+    @property
+    def state(self) -> str:
+        return str((self._usps().get("subject_digest") or "")).strip()
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        dig = (self._usps().get("digest") or {})
+        return {
+            "date_iso": str(dig.get("date_iso", "")),
+            "date_label": str(dig.get("date_label", "")),
+            "dashboard_url": str(self._usps().get("dashboard_url", "")),
+        }
+
+class UspsSubjectDelivered(_Base):
+    """Subject of the latest USPS Delivered (explicit)."""
+    def __init__(self, c, d, ns): super().__init__(c, d, ns, "USPS Subject (Delivered)", "usps_subject_delivered")
+    @property
+    def state(self) -> str:
+        # Prefer nested last_delivered.subject; fallback to flat field if set
+        ld = self._usps_delivered()
+        return str(ld.get("subject") or self._usps().get("subject_delivered") or "").strip()
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        ld = self._usps_delivered()
+        y = int(ld.get("year", 0) or 0)
+        m = _MONTH_INDEX.get(str(ld.get("month", "")).strip(), 0)
+        d = int(ld.get("day", 0) or 0)
+        iso = f"{y:04d}-{m:02d}-{d:02d}" if (y and m and d) else ""
+        return {
+            "date_iso": iso,
+            "date_label": str(ld.get("date_label", "")),
+            "dashboard_url": str(ld.get("dashboard_url", "")),
+        }
 class UspsMailpiecesExpectedToday(_Base):
     def __init__(self, c, d, ns): super().__init__(c, d, ns, "USPS Mailpieces Expected Today", "usps_mailpieces_expected_today")
     @property
@@ -149,6 +184,8 @@ class UspsLastDelivered(_Base):
 # exported factory list
 USPS_ENTITIES = [
     UspsSubject,
+    UspsSubjectDigest,
+    UspsSubjectDelivered,
     UspsMailpiecesExpectedToday,
     UspsPackagesExpectedToday,
     UspsMailFrom,

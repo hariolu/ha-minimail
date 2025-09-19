@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict, Tuple
 from email.message import Message
 from email.header import decode_header, make_header
+from email.utils import parsedate_to_datetime
+from datetime import datetime
 
 # Robust imports for USPS parsers
 try:
@@ -36,7 +38,9 @@ def handle_usps_delivered(msg: Message, usps: Dict[str, Any]) -> Tuple[Dict[str,
     dash = d.get("dashboard_url") or usps.get("dashboard_url") or _DASH
 
     # Keep a readable subject for UI/bot; mark type
-    usps["subject"] = _decode_subject(msg)
+    subj = _decode_subject(msg)
+    usps["subject"] = subj                 # backward compat (latest USPS subject)
+    usps["subject_delivered"] = subj       # explicit Delivered subject
     usps["type"] = "delivered"
 
     # IMPORTANT: also expose dashboard on the root for other sensors
@@ -60,8 +64,24 @@ def handle_usps_digest(msg: Message, usps: Dict[str, Any]) -> Tuple[Dict[str, An
     p = parse_usps_digest(msg) or {}
 
     # Save current readable subject and type for UI/bot
-    usps["subject"] = _decode_subject(msg)
+    subj = _decode_subject(msg)
+    usps["subject"] = subj                 # backward compat (latest USPS subject)
+    usps["subject_digest"] = subj          # explicit Digest subject
     usps["type"] = "digest"
+
+    # Derive digest date from the email's Date header (ISO + friendly)
+    try:
+        dt = parsedate_to_datetime(msg.get("Date"))
+    except Exception:
+        dt = datetime.utcnow()
+    iso = dt.date().isoformat()
+    label = dt.strftime("%a, %b %d")
+
+    # Nest a small digest meta-block (safe to extend in future)
+    dig = usps.setdefault("digest", {})
+    dig["subject"] = subj
+    dig["date_iso"] = iso
+    dig["date_label"] = label
 
     # Core counters & lists
     usps["mail_expected"] = p.get("mail_expected", usps.get("mail_expected"))
