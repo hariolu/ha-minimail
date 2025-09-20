@@ -53,9 +53,16 @@ class AmazonItems(_Base):
     def __init__(self, c, d, ns): super().__init__(c, d, ns, "Amazon Items", "amazon_items")
     @property
     def state(self) -> str:
-        # A short, human-readable summary (first 3 items)
+        # Keep state <= 255 chars: first item + optional "+N more"
         items: List[str] = list(self._amazon().get("items", []) or [])
-        return ", ".join(items[:3]) if items else ""
+        if not items:
+            return ""
+        head = items[0].strip()
+        more = len(items) - 1
+        # hard cap ~200 to be safe even with Unicode; HA limit is 255
+        if len(head) > 200:
+            head = head[:200].rstrip() + "…"
+        return f"{head} (+{more} more)" if more > 0 else head
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         items: List[str] = list(self._amazon().get("items", []) or [])
