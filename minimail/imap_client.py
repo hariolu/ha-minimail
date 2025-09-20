@@ -27,8 +27,12 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
     """
     msg: Message = parsed.get("_message")
     # use casefold() for more robust Unicode-insensitive matching than lower()
-    subj = (parsed.get("subject") or "").casefold()
+    import re
+    subj_raw = parsed.get("subject") or ""
+    subj = subj_raw.casefold()
     frm = (parsed.get("from") or "").casefold()
+    # Normalize subject by stripping common Fwd/Re prefixes for forwarded mails
+    norm_subj = re.sub(r'^\s*((re|fw|fwd)\s*:\s*)+', '', subj_raw, flags=re.I).casefold()
     if not msg:
         return data, flags
 
@@ -39,11 +43,14 @@ def process_message(parsed: Dict[str, Any], data: Dict[str, Any], flags: Dict[st
         or "auto-confirm@amazon" in frm         # Ordered
         or "delivery-update@amazon" in frm      # Delivered / updates
         or "order-update@amazon" in frm
-        or subj.startswith("shipped:")
-        or subj.startswith("delivered:")
-        or subj.startswith("ordered:")
-        or ("out for delivery" in subj)
-        or ("your order has shipped" in subj)
+        or norm_subj.startswith("shipped:")
+        or norm_subj.startswith("delivered:")
+        or norm_subj.startswith("ordered:")
+        or ("shipped:" in norm_subj)            # catch forwarded subjects
+        or ("delivered:" in norm_subj)
+        or ("ordered:" in norm_subj)
+        or ("out for delivery" in norm_subj)
+        or ("your order has shipped" in norm_subj)
     )
     if is_amazon:
         amazon = data.setdefault("amazon", {})
